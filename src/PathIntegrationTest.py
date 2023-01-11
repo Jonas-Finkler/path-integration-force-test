@@ -3,22 +3,34 @@ from ase.io import write
 import numpy as np
 
 class PathIntegrationTest:
-    def __init__(self, center: Atoms, radius: float, nsteps: int, shape='circle', verbose=True):
+    def __init__(self, center: Atoms, radius: float, nsteps: int, check_stress=False, shape='circle', verbose=True):
         """
-
+        Integrate forces along path to check if derivatives of energy are correctly implemented
         :param center: Geoemtry at the center of the circle
         :param radius: Radius of the circle to be integrated
         :param nsteps: Number of integration steps
+        :param check_stress: If true the lattice vectors are integrated instead of the atomic positions
+        :param shape: Can be 'circle', 'line' or 'pentagram'
+        :param verbose: Print output to stdout if true
         """
         self.center = center
         self.radius = radius
         self.nsteps = nsteps
         self.verbose = verbose
-        nats = self.center.get_positions().shape[0]
+        self.check_stress = check_stress
+
+        if self.check_stress:
+            self.center_pos = self.center.get_cell()
+        else:
+            self.center_pos = self.center.get_positions()
+        nats = self.center_pos.shape[0]
         # todo: in case of lattice: choose d1, d2 such that volume is not changed.
         # todo: remove translation and rotation?
         d1 = np.random.randn(nats, 3)
         d2 = np.random.randn(nats, 3)
+        if not self.check_stress:
+            d1 = self.__remove_translation(d1)
+            d2 = self.__remove_translation(d2)
         d1 = d1 / np.linalg.norm(d1)
         d2 = d2 / np.linalg.norm(d2)
         d2 = d2 - d1 * np.sum(d2 * d1)
@@ -28,7 +40,7 @@ class PathIntegrationTest:
 
         self.energies = []
         self.integrated_energies = []
-        self.forces = []
+        self.energy_derivatives = []
         self.positions = []
 
         # todo: ellipse
@@ -43,6 +55,21 @@ class PathIntegrationTest:
             self.positions = self.__pentagram(self.nsteps)
             # close the circle
             self.positions.append(self.positions[0])
+
+
+    @staticmethod
+    def __remove_translation(x: np.ndarray):
+        '''
+        Projects out translational motion from x
+        :param x: input vector
+        :return: x with all three translational dimensions projected out
+        '''
+        y = x.copy()
+        for i in range(3): # x, y, z
+            tv = np.zeros(y.shape)
+            tv[:,i] = 1.
+            y = y - tv * np.sum(y * tv) / np.sum(tv**2)
+        return y
 
 
 
@@ -66,17 +93,16 @@ class PathIntegrationTest:
 
 
     def __circle(self, nsteps):
-        center_pos = self.center.get_positions()
         angles = np.linspace(0, 2 * np.pi, nsteps, endpoint=False)
         positions = []
         for i, angle in enumerate(angles):
-            positions.append(center_pos + (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius)
+            positions.append(self.center_pos + (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius)
         return positions
 
 
     def __line(self, nsteps, posA=None, posB=None):
         if posA is None and posB is None:
-            posA = self.center.get_positions()
+            posA = self.center_pos
             d = np.random.randn(*posA.shape)
             d = d / np.linalg.norm(d) * self.radius
             posB = posA + d
@@ -86,6 +112,10 @@ class PathIntegrationTest:
 
 
     def integrate(self):
+        '''
+        Perform the integration along the path specified in the constructor
+        :return: maximum energy error along path and range of the energy along path
+        '''
         x = self.center.copy()
         x.calc = self.center.calc # todo: is this safe? MG: Yes
 
@@ -99,7 +129,12 @@ class PathIntegrationTest:
             print('     step |            energy | integrated energy |           error')
 
         for i, pos in enumerate(self.positions):
-            x.set_positions(pos)
+            if self.check_stress:
+                reduced_positions = self.center.get_positions() @ np.linalg.inv(self.center.get_cell())
+                x.set_positions(reduced_positions @ pos)
+                x.set_cell(pos)
+            else:
+                x.set_positions(pos)
             self.__integration_step(x)
 
         energy_range = np.max(self.energies) - np.min(self.energies)
@@ -115,16 +150,25 @@ class PathIntegrationTest:
             print('== End Path Integration Test ==')
         return max_error, energy_range
 
+
+    def __get_energy_and_derivative(self, x: Atoms):
+        e = x.get_potential_energy()
+        if self.check_stress:
+            return e, self.lattice_derivative(x.get_stress(voigt=False), x.get_cell())
+        else:
+            return e, -1. * x.get_forces()
+
     def __integration_step(self, x):
         i = len(self.energies)
-        self.energies.append(x.get_potential_energy())
-        self.forces.append(x.get_forces())
+        energy, energy_derivative = self.__get_energy_and_derivative(x)
+        self.energies.append(energy)
+        self.energy_derivatives.append(energy_derivative)
         if i == 0:
             self.integrated_energies.append(self.energies[0])
         else:
-            f_mean = (self.forces[i] + self.forces[i-1]) / 2
+            f_mean = (self.energy_derivatives[i] + self.energy_derivatives[i-1]) / 2
             dx = self.positions[i] - self.positions[i-1]
-            self.integrated_energies.append(self.integrated_energies[i-1] - np.sum(f_mean * dx))
+            self.integrated_energies.append(self.integrated_energies[i-1] + np.sum(f_mean * dx))
         if self.verbose:
             print('    {:5d} {:19.7f} {:19.7f} {:17.11f}'.format(
                 i,
@@ -152,6 +196,10 @@ class PathIntegrationTest:
             return path
 
     def plot_pentagram_energy(self):
+        '''
+        If the pentagram option was choosen and the center is at a local minimum this creates a nice star shaped plot
+        :return:
+        '''
         import matplotlib.pyplot as plt
         nsteps_circ, nsteps_line = self.__get_pentagram_nsteps(self.nsteps)
         path = list(np.linspace(0, 2 * np.pi, nsteps_circ, endpoint=False))
@@ -181,6 +229,10 @@ class PathIntegrationTest:
         plt.show()
 
     def plot_energy_along_path(self):
+        '''
+        Plots the energy and the integrated energy along the path to visually check if the forces are correct
+        :return:
+        '''
         import matplotlib.pyplot as plt
         path = self.__get_path_length()
         plt.plot(path, self.energies, label='energy')
@@ -192,6 +244,10 @@ class PathIntegrationTest:
         plt.show()
 
     def plot_error_along_path(self):
+        '''
+        Plots the error along the path (integrated_energy - real_energy)
+        :return:
+        '''
         import matplotlib.pyplot as plt
         path = self.__get_path_length()
         plt.grid()
@@ -203,11 +259,25 @@ class PathIntegrationTest:
         plt.show()
 
     def write_to_file(self, filename):
-        ...
+        with open(filename, 'w') as f:
+            f.write('# iteration, energy, integrated energy, energy error, energy derivative norm (all units are Angstrom and eV)\n')
+            for i in range(len(self.positions)):
+                f.write(f'{i} {self.energies[i]} {self.integrated_energies[i]} {self.energy_error[i]} '
+                         + f'{np.linalg.norm(self.energy_derivatives[i])}\n')
 
     def write_trajectory(self, filename):
+        '''
+        Writes the trajectory coordinates to a file
+        :param filename:
+        :return:
+        '''
         # todo: lattice?
-        atoms_list = [self.center.copy().set_positions(pos) for pos in self.positions]
+        def set_pos(pos):
+            ats = self.center.copy()
+            ats.set_positions(pos)
+            return ats
+
+        atoms_list = [set_pos(pos) for pos in self.positions]
         write(filename, atoms_list)
 
 
@@ -231,5 +301,5 @@ class PathIntegrationTest:
 
         inv_cell = np.linalg.inv(cell)
         prefact = np.linalg.det(cell)
-        deralat = - prefact * np.matmul(stress_tensor, inv_cell)
+        deralat = prefact * np.matmul(stress_tensor, inv_cell)
         return deralat

@@ -20,7 +20,7 @@ class PathIntegrationTest:
         self.check_stress = check_stress
 
         if self.check_stress:
-            self.center_pos = self.center.get_cell()
+            self.center_pos = self.center.get_cell(True)
         else:
             self.center_pos = self.center.get_positions()
         nats = self.center_pos.shape[0]
@@ -130,7 +130,7 @@ class PathIntegrationTest:
 
         for i, pos in enumerate(self.positions):
             if self.check_stress:
-                reduced_positions = self.center.get_positions() @ np.linalg.inv(self.center.get_cell())
+                reduced_positions = self.center.get_positions() @ np.linalg.inv(self.center.get_cell(True))
                 x.set_positions(reduced_positions @ pos)
                 x.set_cell(pos)
             else:
@@ -154,7 +154,7 @@ class PathIntegrationTest:
     def __get_energy_and_derivative(self, x: Atoms):
         e = x.get_potential_energy()
         if self.check_stress:
-            return e, self.lattice_derivative(x.get_stress(voigt=False), x.get_cell())
+            return e, self.lattice_derivative(x.get_stress(voigt=False), x.get_cell(True))
         else:
             return e, -1. * x.get_forces()
 
@@ -274,7 +274,13 @@ class PathIntegrationTest:
         # todo: lattice?
         def set_pos(pos):
             ats = self.center.copy()
-            ats.set_positions(pos)
+            if self.check_stress:
+                reduced_positions = self.center.get_scaled_positions()
+                ats.set_cell(pos)
+                ats.set_scaled_positions(reduced_positions)
+                
+            else:
+                ats.set_positions(pos)
             return ats
 
         atoms_list = [set_pos(pos) for pos in self.positions]
@@ -291,7 +297,7 @@ class PathIntegrationTest:
         Input:
             stress_tensor: stress tensor from ase atoms object
                 stress tensor from ase atoms object (atoms.get_stress(voigt=False,apply_constraint=False))
-            cell: cell from ase atoms object (atoms.get_cell(complete=False))
+            cell: cell from ase atoms object (atoms.get_cell(complete=True))
         Return:
             deralat: np array
                 numpy array containing the lattice derivatives

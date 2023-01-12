@@ -3,7 +3,7 @@ from ase.io import write
 import numpy as np
 
 class PathIntegrationTest:
-    def __init__(self, center: Atoms, radius: float, nsteps: int, check_stress=False, shape='circle', verbose=True):
+    def __init__(self, center: Atoms, radius: float, nsteps: int, check_stress=False, shape='circle', verbose=True, randomTrajectory = False, startingPointIsOnCircle = True):
         """
         Integrate forces along path to check if derivatives of energy are correctly implemented
         :param center: Geoemtry at the center of the circle
@@ -12,12 +12,18 @@ class PathIntegrationTest:
         :param check_stress: If true the lattice vectors are integrated instead of the atomic positions
         :param shape: Can be 'circle', 'line' or 'pentagram'
         :param verbose: Print output to stdout if true
+        :param randomTrajectory: if false, random seed is set before trajectory is generated
+        :param startingPointIsOnCircle: if true, starting point is on circles
         """
         self.center = center
         self.radius = radius
         self.nsteps = nsteps
         self.verbose = verbose
         self.check_stress = check_stress
+        self.startingPointIsOnCircle = startingPointIsOnCircle
+
+        if not randomTrajectory:
+            np.random.seed(7342863)
 
         if self.check_stress:
             self.center_pos = self.center.get_cell(True)
@@ -96,7 +102,12 @@ class PathIntegrationTest:
         angles = np.linspace(0, 2 * np.pi, nsteps, endpoint=False)
         positions = []
         for i, angle in enumerate(angles):
-            positions.append(self.center_pos + (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius)
+            if i == 0:
+                if self.startingPointIsOnCircle:
+                    displacement = (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius
+                else:
+                    displacement = 0.0
+            positions.append(self.center_pos + (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius - displacement)
         return positions
 
 
@@ -135,6 +146,8 @@ class PathIntegrationTest:
                 x.set_cell(pos)
             else:
                 x.set_positions(pos)
+            if i == 0:
+                self.e0 = x.get_potential_energy()
             self.__integration_step(x)
 
         energy_range = np.max(self.energies) - np.min(self.energies)
@@ -161,12 +174,14 @@ class PathIntegrationTest:
     def __integration_step(self, x):
         i = len(self.energies)
         energy, energy_derivative = self.__get_energy_and_derivative(x)
+        energy = energy - self.e0
         self.energies.append(energy)
         self.energy_derivatives.append(energy_derivative)
         if i == 0:
             self.integrated_energies.append(self.energies[0])
         else:
-            f_mean = (self.energy_derivatives[i] + self.energy_derivatives[i-1]) / 2
+            # f_mean = (self.energy_derivatives[i] + self.energy_derivatives[i-1]) / 2
+            f_mean = self.energy_derivatives[i-1] 
             dx = self.positions[i] - self.positions[i-1]
             self.integrated_energies.append(self.integrated_energies[i-1] + np.sum(f_mean * dx))
         if self.verbose:

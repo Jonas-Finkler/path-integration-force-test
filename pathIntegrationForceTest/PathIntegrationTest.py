@@ -180,8 +180,8 @@ class PathIntegrationTest:
         if i == 0:
             self.integrated_energies.append(self.energies[0])
         else:
-            # f_mean = (self.energy_derivatives[i] + self.energy_derivatives[i-1]) / 2
-            f_mean = self.energy_derivatives[i-1] 
+            f_mean = (self.energy_derivatives[i] + self.energy_derivatives[i-1]) / 2
+            #f_mean = self.energy_derivatives[i-1]
             dx = self.positions[i] - self.positions[i-1]
             self.integrated_energies.append(self.integrated_energies[i-1] + np.sum(f_mean * dx))
         if self.verbose:

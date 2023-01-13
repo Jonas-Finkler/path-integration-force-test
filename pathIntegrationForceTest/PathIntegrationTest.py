@@ -13,7 +13,7 @@ class PathIntegrationTest:
         :param shape: Can be 'circle', 'line' or 'pentagram'
         :param verbose: Print output to stdout if true
         :param randomTrajectory: if false, random seed is set before trajectory is generated
-        :param startingPointIsOnCircle: if true, starting point is on circles
+        :param startingPointIsOnCircle: if true, the trajectory starts at center, i.e., center is on the circle. Otherwise center is the center of the circle.
         """
         self.center = center
         self.radius = radius
@@ -101,13 +101,9 @@ class PathIntegrationTest:
     def __circle(self, nsteps):
         angles = np.linspace(0, 2 * np.pi, nsteps, endpoint=False)
         positions = []
+        offset = self.d1 * self.radius if self.startingPointIsOnCircle else 0.0
         for i, angle in enumerate(angles):
-            if i == 0:
-                if self.startingPointIsOnCircle:
-                    displacement = (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius
-                else:
-                    displacement = 0.0
-            positions.append(self.center_pos + (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius - displacement)
+            positions.append(self.center_pos + (self.d1 * np.cos(angle) + self.d2 * np.sin(angle)) * self.radius - offset)
         return positions
 
 

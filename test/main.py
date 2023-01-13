@@ -24,7 +24,7 @@ def main():
     #print(e, np.linalg.norm(f))
 
     # Setup: The pentagram is most fun
-    pathIntTest = PathIntegrationTest(atoms, 0.2, 100, shape='pentagram')
+    pathIntTest = PathIntegrationTest(atoms, 0.2, 100, shape='pentagram', startingPointIsOnCircle=False)
     # run the integration
     pathIntTest.integrate()
     # plot the energy and error
@@ -36,13 +36,13 @@ def main():
 
     pathIntTest.write_trajectory('../test/traj.extxyz')
 
-    # if you dont want to use matplotlib you can write it to a file and plot it yourself
+    # if you don't want to use matplotlib you can write it to a file and plot it yourself
     pathIntTest.write_to_file('../test/path_int_test.txt')
 
     # displace the atoms away from the local minimum
     atoms.set_positions(atoms.get_positions() + np.random.randn(*atoms.get_positions().shape) * 0.2)
     # the circle test is maybe the most usefule one
-    pathIntTest = PathIntegrationTest(atoms, 0.2, 100, shape='circle')
+    pathIntTest = PathIntegrationTest(atoms, 0.2, 100, shape='circle', startingPointIsOnCircle=False)
     max_error, energy_range = pathIntTest.integrate()
     # we can use these values to compute a measure for the accuracy
     print(max_error / energy_range)

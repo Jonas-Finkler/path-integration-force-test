@@ -3,7 +3,7 @@ from ase.io import read, write
 from ase.optimize import BFGS
 from ase.build.bulk import bulk
 import numpy as np
-from PathIntegrationTest import PathIntegrationTest
+from pathIntegrationForceTest.PathIntegrationTest import PathIntegrationTest
 
 
 def main():

@@ -318,5 +318,5 @@ class PathIntegrationTest:
 
         inv_cell = np.linalg.inv(cell)
         prefact = np.linalg.det(cell)
-        deralat = prefact * np.matmul(stress_tensor, inv_cell)
-        return deralat
+        deralat = (prefact * np.matmul(stress_tensor, inv_cell)).T
+        return deralat.T

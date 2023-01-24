@@ -51,13 +51,14 @@ def main():
 
 def main_periodic():
     atoms = bulk('Ar', 'bcc', 1.233, orthorhombic=True)#.repeat((2, 2, 2))
+    atoms.set_cell(atoms.get_cell(complete=True) + np.random.randn(3, 3) * 0.2)
     atoms.calc = LennardJones(rc = 10, smooth=True)
     write('../test/in_periodic.extxyz', atoms)
     write('../test/in_periodic.ascii', atoms)
 
     e = atoms.get_potential_energy()
     f = atoms.get_forces()
-    s = atoms.get_stress()
+    s = atoms.get_stress(voigt=False)
     print(e, np.linalg.norm(f), np.linalg.norm(s))
 
     # It also works with periodic systems

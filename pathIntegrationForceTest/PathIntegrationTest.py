@@ -317,6 +317,6 @@ class PathIntegrationTest:
         assert cell.shape == (3, 3), 'Cell is not a 3x3 array'
 
         inv_cell = np.linalg.inv(cell)
-        prefact = np.linalg.det(cell)
-        deralat = (prefact * np.matmul(stress_tensor, inv_cell)).T
+        volume = np.abs(np.linalg.det(cell))
+        deralat = (volume * np.matmul(stress_tensor, inv_cell)).T
         return deralat
